@@ -37,9 +37,8 @@ import (
 	"strings"
 	"time"
 
-	"goutils"
-
 	"github.com/seiflotfy/cuckoofilter"
+	goutils "github.com/tenta-browser/go-utils"
 	"golang.org/x/net/publicsuffix"
 )
 
