@@ -48,23 +48,28 @@ var chosenDelimiter uint32
 var encodeBits = 16
 var encodeMap map[int]int
 
+// RuleSt - structure used to import rewrite data from xml
 type RuleSt struct {
 	From string `xml:"from,attr"`
 	To   string `xml:"to,attr"`
 }
 
+// TargetSt - structure used to import target data from xml
 type TargetSt struct {
 	Host string `xml:"host,attr"`
 }
 
+// ExclusionSt - structure used to import exclusion data from xml
 type ExclusionSt struct {
 	Pattern string `xml:"pattern,attr"`
 }
 
+// TestSt - structure used to import testing data from xml
 type TestSt struct {
-	Url string `xml:"url,attr"`
+	URL string `xml:"url,attr"`
 }
 
+// RulesetSt - represents an xml rule file
 type RulesetSt struct {
 	Index     int
 	Name      string        `xml:"name,attr"`
@@ -75,22 +80,24 @@ type RulesetSt struct {
 	Test      []TestSt      `xml:"test"`
 }
 
+// SimplifiedRulesetSt - a rule file, holding only necessary data
 type SimplifiedRulesetSt struct {
 	exclusion, ruleFrom, ruleTo []string
 }
 
+// HtEvSt - internal representation of the input rulesets
 type HtEvSt struct {
 	filterBytesNum, forwardBytesNum int
 	input                           []*RulesetSt
 	filter                          *cuckoofilter.CuckooFilter
 	forward                         map[string][]*RulesetSt
-	// reconstructedForward            map[string]int /// this will be the decoded version of forward, int is an index in regularSlice
-	optimizedForward map[goutils.Regexp][]int
-	regularMap       map[uint32][]int
-	regularSlice     []*SimplifiedRulesetSt
+	optimizedForward                map[goutils.Regexp][]int
+	regularMap                      map[uint32][]int
+	regularSlice                    []*SimplifiedRulesetSt
 }
 
-var RuleIndex int = 0
+// RuleIndex - used for indexing the RulesetSt's as they are generated
+var RuleIndex int
 
 func tokenizeURL(in string) (scheme, domain, site string, subdomain []string, e error) {
 	/// detach the scheme part
@@ -130,10 +137,8 @@ func (h *HtEvSt) search(t string) (ruleInd []int, e error) {
 	if e != nil {
 		return nil, fmt.Errorf("cannot tokenize [%s]", e.Error())
 	}
-	// fmt.Printf("Launched search for [%s] -> we have [%s] [%v]\n", t, domain, subdomain)
 
 	orig := append(subdomain, strings.Split(domain, ".")...)
-	// fmt.Printf("Orig is [%v]\n", orig)
 	origLen := len(orig)
 	variations := []string{strings.Join(orig, "."), strings.Join(append(orig[:origLen-1], "*"), ".")}
 	/// wildcard subdomains only if they exist in the url
@@ -144,15 +149,8 @@ func (h *HtEvSt) search(t string) (ruleInd []int, e error) {
 	/// forward now has keys as regexes, so we'll compile and try to apply them (will do a precompile pass later, in the decode phase)
 
 	for k, v := range h.optimizedForward {
-		// r := goutils.ReEngine.Compile(k, 0)
-		// if e != nil {
-		// 	return nil, fmt.Errorf("error compiling [%s], [%s]", k, e.Error())
-		// }
-		// fmt.Printf("Matching [%s] vs [%s] --> [%v]\n", variations[0], k, r.Search(variations[0]).GroupPresentByIdx(0))
-		/// we have a match for the whole pattern
 		if m := k.Search(variations[0]); m != nil && m.GroupPresentByIdx(0) == true {
 			fmt.Printf("Rule struct found via forward.\n")
-			// return v, nil
 			if ruleInd == nil {
 				ruleInd = make([]int, 0)
 			}
@@ -165,7 +163,6 @@ func (h *HtEvSt) search(t string) (ruleInd []int, e error) {
 		if h.filter.Lookup([]byte(v)) {
 			if ind, contains := h.regularMap[hash(v)]; contains {
 				fmt.Printf("Rule struct found via filter+regular.\n")
-				//return ind, nil
 				if ruleInd == nil {
 					ruleInd = make([]int, 0)
 				}
@@ -178,8 +175,8 @@ func (h *HtEvSt) search(t string) (ruleInd []int, e error) {
 	return ruleInd, nil
 }
 
-/// exported function which finds rule struct (if applicable), and applies the (most) appropriate rewrite rule
-/// okay, so, tri-state return: problem -> e != nil, no match -> out == "" && e == nil, match -> out != "" && e != nil
+// TryRewrite - exported function which finds rule struct (if applicable), and applies the (most) appropriate rewrite rule
+// okay, so, tri-state return: problem -> e != nil, no match -> out == "" && e == nil, match -> out != "" && e != nil
 func (h *HtEvSt) TryRewrite(in string) (out string, e error) {
 	out = in
 	start := time.Now()
@@ -194,7 +191,6 @@ func (h *HtEvSt) TryRewrite(in string) (out string, e error) {
 
 	/// here comes another batch of pcre-dependent codes
 	for _, ri := range ruleIndices {
-		//fmt.Printf("Trying rule index [%d] of [%d]\n", i, len(ruleIndices))
 		rule := h.regularSlice[ri]
 		needsToContinue := false
 		for _, excl := range rule.exclusion {
@@ -205,7 +201,6 @@ func (h *HtEvSt) TryRewrite(in string) (out string, e error) {
 			/// try matching the exclusions
 			if m := re.Search(in); m != nil && m.GroupPresentByIdx(0) == true {
 				fmt.Printf("Input [%s] excluded via pattern [%s].\n", in, excl)
-				//return "", nil
 				needsToContinue = true
 				break
 			}
@@ -222,7 +217,6 @@ func (h *HtEvSt) TryRewrite(in string) (out string, e error) {
 
 			if m := re.Search(in); m != nil && m.GroupPresentByIdx(0) == true {
 				fmt.Printf("Input [%s] matching rewrite pattern [%s].\n", in, rewrite)
-				//out := re.ReplaceAllString(in, rule.ruleTo[i], 0)
 				out := re.Replace(in, rule.ruleTo[i])
 				fmt.Printf("Rewrote to [%s]\n", out)
 				fmt.Printf("Search+Rewrite took [%v] time.\n", time.Now().Sub(start))
@@ -234,7 +228,7 @@ func (h *HtEvSt) TryRewrite(in string) (out string, e error) {
 	return "", nil
 }
 
-func (h *HtEvSt) NewRulesetSt() (r *RulesetSt) {
+func (h *HtEvSt) newRulesetSt() (r *RulesetSt) {
 	r = &RulesetSt{Index: RuleIndex}
 	RuleIndex++
 	h.input = append(h.input, r)
@@ -244,7 +238,7 @@ func (h *HtEvSt) NewRulesetSt() (r *RulesetSt) {
 	return
 }
 
-func NewSimplifiedRulesetSt() *SimplifiedRulesetSt {
+func newSimplifiedRulesetSt() *SimplifiedRulesetSt {
 	//return &SimplifiedRulesetSt{make([]string, 0), make([]string, 0), make([]string, 0)}
 	return &SimplifiedRulesetSt{}
 }
@@ -288,7 +282,6 @@ func encodeForwardMap(h *HtEvSt) (ret []byte, e error) {
 	/// basic scheme: ([strlen][str][index]){len(h.forward)}
 	for target, ruleArr := range h.forward {
 		for _, rule := range ruleArr {
-			//fmt.Printf("[%s] =>\n[%s]\nvs\n[%s]\n", target, rule, h.regularSlice[encodeMap[rule.Index]])
 			if e = b.Emit(uint(len(target)), 32); e != nil {
 				return nil, fmt.Errorf("error emitting str length [%s]", e.Error())
 			}
@@ -311,18 +304,15 @@ func decodeRegularSlice(b []byte) ([]*SimplifiedRulesetSt, error) {
 	if sliceLen, e = r.Collect(32); e != nil {
 		return nil, fmt.Errorf("decodeRegularSlice error [%s]", e.Error())
 	}
-	// fmt.Printf("Slice elem num is [%d]\n", sliceLen)
 	ret := make([]*SimplifiedRulesetSt, int(sliceLen))
 	for i := 0; i < int(sliceLen); i++ {
-		// fmt.Printf("[%d]", i)
 		if elemLen, e = r.Collect(32); e != nil {
 			return nil, fmt.Errorf("decodeRegularSlice elem size error [%s]", e.Error())
 		}
-		// fmt.Printf("Next elem is [%d] bytes long.\n", elemLen)
 		if elem, e = r.DeAppend(int(elemLen)); e != nil {
 			return nil, fmt.Errorf("decodeRegularSlice elem error [%s]", e.Error())
 		}
-		ret[i] = NewSimplifiedRulesetSt()
+		ret[i] = newSimplifiedRulesetSt()
 		if e = ret[i].decode(elem); e != nil {
 			return nil, e
 		}
@@ -335,8 +325,6 @@ func decodeRegularSlice(b []byte) ([]*SimplifiedRulesetSt, error) {
 func encodeRegularSlice(r []*SimplifiedRulesetSt) (ret []byte, e error) {
 	b := serialize.NewBitStreamOps()
 	b.Emit(uint(len(r)), 32)
-	// fmt.Printf("Regular slice elem num is [%d]\n", len(r))
-	// fmt.Printf("And that looks like this [%x]\n", b.Buffer()[len(b.Buffer())-4:])
 	for _, sr := range r {
 		t := sr.encode()
 		b.Append(t)
@@ -441,14 +429,12 @@ func (s *SimplifiedRulesetSt) decode(b []byte) error {
 	if s.exclusion != nil || s.ruleFrom != nil || s.ruleTo != nil {
 		return fmt.Errorf("not a blank structure")
 	}
-	// fmt.Printf("Called decode with [%d] bytes.<%v>\n", len(b), b)
 	var exclSize, fromtoSize, currStrlen uint
 	var e error
 	r := serialize.NewBitStreamOpsReader(b)
 	if exclSize, e = r.Collect(encodeBits); e != nil {
 		return fmt.Errorf("decode error [%s]", e.Error())
 	}
-	// fmt.Printf("Excl size is [%d]\n", exclSize)
 	s.exclusion = make([]string, exclSize)
 	for i := 0; i < int(exclSize); i++ {
 		if currStrlen, e = r.Collect(encodeBits); e != nil {
@@ -479,7 +465,6 @@ func (s *SimplifiedRulesetSt) decode(b []byte) error {
 			return fmt.Errorf("deconcat error [%s]", e.Error())
 		}
 	}
-	// fmt.Printf("Have :: [%s]\n", s)
 	return nil
 }
 
@@ -592,6 +577,7 @@ func (r *RulesetSt) simplify() (s *SimplifiedRulesetSt) {
 	return
 }
 
+// ShowStats - prints a statistics line about the internal structure
 func (h *HtEvSt) ShowStats() {
 	var cnt int
 	for _, r := range h.regularSlice {
@@ -600,6 +586,7 @@ func (h *HtEvSt) ShowStats() {
 	fmt.Printf("We have filter [%d], slice [%d], map [%d], forward [%d]. Chars [%d]\n", h.filter.Count(), len(h.regularSlice), len(h.regularMap), len(h.optimizedForward), cnt)
 }
 
+// Decode - reconstructs the structure from a byte slice
 func Decode(b []byte) (h *HtEvSt, e error) {
 	r := serialize.NewBitStreamOpsReader(b)
 	h = &HtEvSt{}
@@ -621,7 +608,6 @@ func Decode(b []byte) (h *HtEvSt, e error) {
 		return nil, fmt.Errorf("Cannot decode filter [%s]", e.Error())
 	}
 	/// read length of regular slice bytes
-	// fmt.Printf("And that looks like this [%x]\n", r.Buffer()[r.Index():r.Index()+8])
 	if temp, e = r.Collect(32); e != nil {
 		return nil, fmt.Errorf("Cannot read length of regular slice [%s]", e.Error())
 	}
@@ -667,6 +653,7 @@ func Decode(b []byte) (h *HtEvSt, e error) {
 	return
 }
 
+// EncodeToPath - encodes internal structure into a byte slice, and flushes it to disk
 func (h *HtEvSt) EncodeToPath(outFile string) (b []byte, e error) {
 	b, e = h.Encode()
 	if e != nil {
@@ -678,6 +665,7 @@ func (h *HtEvSt) EncodeToPath(outFile string) (b []byte, e error) {
 	return b, e
 }
 
+// Encode - encodes internal structure
 func (h *HtEvSt) Encode() (ret []byte, e error) {
 	e = nil
 	var t []byte
@@ -685,42 +673,31 @@ func (h *HtEvSt) Encode() (ret []byte, e error) {
 	b := serialize.NewBitStreamOps()
 	/// first encode the filter (with leading numbytes)
 	t = h.filter.Encode()
-	// fmt.Printf("Emitting filter length [%d][%x]\n", len(t), len(t))
 	b.Emit(uint(len(t)), 32)
-	// fmt.Printf("[%v]\n", b.Buffer())
 	b.Append(t)
 	sumBytes += len(t) + 4
-	// fmt.Printf("Asserting that %d == %d\n", len(b.Buffer()), sumBytes)
 	/// next encode the regular slice (with leading numbytes)
 	if t, e = encodeRegularSlice(h.regularSlice); e != nil {
 		return nil, fmt.Errorf("encode regular slice error [%s]", e.Error())
 	}
-	// fmt.Printf("Emitting reg slice length [%d][%x]\n", len(t), len(t))
 	b.Emit(uint(len(t)), 32)
-	// fmt.Printf("And that looks like this [%x]\n", b.Buffer()[len(b.Buffer())-5:])
 	b.Append(t)
-	// fmt.Printf("And that looks like this [%x]\n", b.Buffer()[sumBytes:sumBytes+4])
 	sumBytes += len(t) + 4
-	// fmt.Printf("Asserting that %d == %d\n", len(b.Buffer()), sumBytes)
 	/// follows encoding of regular map
 	if t, e = encodeRegularMap(h); e != nil {
 		return nil, fmt.Errorf("encode regular map error [%s]", e.Error())
 	}
 	b.Emit(uint(len(t)), 32)
 	b.Append(t)
-	// fmt.Printf("Emitting reg map length [%d][%x]\n", len(t), len(t))
 	sumBytes += len(t)
-	// fmt.Printf("Asserting that %d == %d\n", len(b.Buffer()), sumBytes)
 	/// follows encoding of forward map
 	if t, e = encodeForwardMap(h); e != nil {
 		return nil, fmt.Errorf("encode forward map error [%s]", e.Error())
 	}
-	// fmt.Printf("Emitting fwd map length [%d][%x]\n", len(t), len(t))
 
 	b.Emit(uint(len(t)), 32)
 	b.Append(t)
 	sumBytes += len(t) + 4
-	// fmt.Printf("Asserting that %d == %d\n", len(b.Buffer()), sumBytes)
 
 	fmt.Printf("The encode buffer is [%d] bytes long.\n", len(b.Buffer()))
 
@@ -757,7 +734,7 @@ func (r *RulesetSt) retroactiveJoin(s *RulesetSt, hm map[string]*RulesetSt, data
 	}
 
 	//superRuleset := &RulesetSt{Name: r.Name + "-REDUX", Disabled: r.Disabled, Target: make([]TargetSt, 0), Rule: make([]RuleSt, 0), Exclusion: make([]ExclusionSt, 0)}
-	superRuleset := data.NewRulesetSt()
+	superRuleset := data.newRulesetSt()
 	superRuleset.Name = r.Name + "-REDUX"
 	superRuleset.Disabled = r.Disabled
 	superRuleset.Target = make([]TargetSt, 0)
@@ -778,15 +755,13 @@ func (r *RulesetSt) retroactiveJoin(s *RulesetSt, hm map[string]*RulesetSt, data
 	/// follows rewriting the map for all entries
 
 	for _, t := range superRuleset.Target {
-		// if _, contains := hm[t.Host]; contains {
-		//fmt.Printf(">>>Rewriting [%s] with new super-rule.\n", t.Host)
 		hm[t.Host] = superRuleset
-		// }
 	}
 	/// propagate the change back to the origin; this helps in persisting the change back to forward table (if applies).
 	*r = *superRuleset
 }
 
+// Parse - reads rule xml files and constructs their in-memory representation
 func Parse(RulePath string) (*HtEvSt, error) {
 	list, err := ioutil.ReadDir(RulePath)
 	if err != nil {
@@ -818,8 +793,7 @@ func Parse(RulePath string) (*HtEvSt, error) {
 
 		}
 
-		//res := &RulesetSt{}
-		res := data.NewRulesetSt()
+		res := data.newRulesetSt()
 		if err := xml.Unmarshal(xmldata, &res); err != nil {
 			fmt.Printf("Error occured in file [%s] :: [%s]\n", entry.Name(), err.Error())
 			continue
@@ -827,7 +801,6 @@ func Parse(RulePath string) (*HtEvSt, error) {
 
 		/// use only valid rulesets
 		if res.Disabled == "" {
-			//data.input = append(data.input, res)
 			/// collect some data to brag about
 			inputNum += len(res.Target)
 			for _, rule := range res.Rule {
@@ -857,14 +830,6 @@ func Parse(RulePath string) (*HtEvSt, error) {
 				regularNum++
 				/// check for target already in map, and do the grand unification scheme if so
 				/// iced the unification scheme, it breaks some rules
-				// if orig, contains := test[t.Host]; contains {
-				// 	fmt.Printf("Duplicated host >>>[%s]<<< [%s] -- [%s]\n", t.Host, res.Name, orig.Name)
-				// 	// fmt.Printf("Duplicates: orig [%s]\nnew [%s]\n", orig, res)
-				// 	orig.retroactiveJoin(res, test, data)
-				// 	// fmt.Printf("SuperRule [%s]\n", orig)
-				// } else {
-				// 	test[t.Host] = res
-				// }
 				if test[t.Host] == nil {
 					test[t.Host] = make([]*RulesetSt, 0)
 				}
@@ -875,10 +840,6 @@ func Parse(RulePath string) (*HtEvSt, error) {
 		}
 
 	}
-
-	/// we have now all the targets and rules sorted and placed in a neat way now, we can construct the hashmap
-	/// ...with a twist, and an obvious one, encoding solely on the hashmap would be tedious since values repeat themselves, therefore, we create a map of [uint64]->int(index),
-	/// and create a separate slice with the rule structures
 
 	/// saves the unique indexes here
 	encodeMap = make(map[int]int)
@@ -905,7 +866,6 @@ func Parse(RulePath string) (*HtEvSt, error) {
 		for _, obj := range objArr {
 			if index, contains := encodeMap[obj.Index]; contains {
 				data.regularMap[hc] = append(data.regularMap[hc], index)
-				//fmt.Printf("Already saved! [%s] -> [%s]\n", target, data.regularSlice[index])
 			} else {
 
 				simple := obj.simplify()
@@ -935,9 +895,7 @@ func Parse(RulePath string) (*HtEvSt, error) {
 	for _, e := range data.input {
 		for _, t := range e.Target {
 			b := data.filter.Lookup([]byte(t.Host))
-			// fmt.Printf("[%v]", b)
 			if b != true {
-				// fmt.Printf("#[%s]\n", t.Host)
 			}
 		}
 	}
