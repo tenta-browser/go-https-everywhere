@@ -1,31 +1,51 @@
+/**
+ * Go HTTPS Everywhere
+ *
+ *    Copyright 2017 Tenta, LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * For any questions, please contact developer@tenta.io
+ *
+ * https.go: Go HTTPS Everywhere Engine
+ */
+
+// A golang implementation of the EFF's HTTPS Anywhere
+// This source contains exports for both _server_ and client-side use, as in, the construction of the ruleset in proprietary format
+//   and the reconstruction into memory, and actual intended URL rewrite logic
+// The general approach is to teach a filter about the simple target hosts (no wildcard, or one wildcard at one of the endings of the pattern),
+//   this will block the vast majority of sites (with testing time well below the millisecond), complicated wildcards will be saved in a map,
+//   and transformed into a pcre regex pattern (the * token will be expanded into [^\.]+) and precompiled for speed (right now there are 22 such cases),
+//   and tried by matching the input versus the compiled regex; lastly there's a hashmap (which has indices the 32bit hash of the target string representation,
+//	 values, the associated rulesets) which will load the available rules to apply, this is a filtering and retrieval logic.
+//   Upon generating the structure hash collisions are handled by evacuating the colliding entry into the forward structure.
+//   A flow of rewrite is as follows:
+//     1. try to match input to forward map regexes
+//     1.1 if match occurs, apply the first rule that fits (return if url is excluded), return the resulting url
+//     2. try url in filter, if is not found (not, there is 0% false negatives) return
+//     3. find the asociated rulesets with combinations {url, url_first_subdomain_wildcarded, url_tld_wildcarded}
+//     (Example: input = somesubdomain.example.com -> {somesubdomain.example.com, *.example.com, somesubdomain.example.*})
+//     3.1 if there's a match, apply the first rule that fits (return if url is excluded), and return the new url
+// Encoding takes the structures and serializes them in a space optimized format, cuckoofilter has already an encode implemented, slice is encoded in a straightforward manner,
+//   regularMap (aka map[uint32][]int, aka hash(url)->array(of_applicable_rulesets)) needs an extra step, since the unique values are around 5K (the `int`s from all the `[]int`s),
+//   the implementation is to flip the map and try to encode a [][]uint32
+//   where the index of the first dimension is the value from the map, and the second index is the order of occurence of the hash, and finally the uint32 values are the hashes
+// Exported functions:
+//   Parse -- reads the rules from the given path, and constructs the appropriate structures resulting in a HtEvSt or an error
+//   Encode/EncodeToPath/Decode -- as their name suggests handles encoding and decoding of the structure, EncodeToPath flushes the compressed format to a specified file.
+//   TryRewrite -- searches for and applies the appropriate rewrite rules, returns the new url (or old one if no match occured) or an error
 package https
 
-/*
-** EFF's Http-everywhere:
-** This source contains exports for both _server_ and client-side use, as in, the construction of the ruleset in proprietary format
-**   and the reconstruction into memory, and actual intended URL rewrite logic
-** The general approach is to teach a filter about the simple target hosts (no wildcard, or one wildcard at one of the endings of the pattern),
-**   this will block the vast majority of sites (with testing time well below the millisecond), complicated wildcards will be saved in a map,
-**   and transformed into a pcre regex pattern (the * token will be expanded into [^\.]+) and precompiled for speed (right now there are 22 such cases),
-**   and tried by matching the input versus the compiled regex; lastly there's a hashmap (which has indices the 32bit hash of the target string representation,
-**	 values, the associated rulesets) which will load the available rules to apply, this is a filtering and retrieval logic.
-**   Upon generating the structure hash collisions are handled by evacuating the colliding entry into the forward structure.
-**   A flow of rewrite is as follows:
-**     1. try to match input to forward map regexes
-**     1.1 if match occurs, apply the first rule that fits (return if url is excluded), return the resulting url
-**     2. try url in filter, if is not found (not, there is 0% false negatives) return
-**     3. find the asociated rulesets with combinations {url, url_first_subdomain_wildcarded, url_tld_wildcarded}
-**     (Example: input = somesubdomain.example.com -> {somesubdomain.example.com, *.example.com, somesubdomain.example.*})
-**     3.1 if there's a match, apply the first rule that fits (return if url is excluded), and return the new url
-** Encoding takes the structures and serializes them in a space optimized format, cuckoofilter has already an encode implemented, slice is encoded in a straightforward manner,
-**   regularMap (aka map[uint32][]int, aka hash(url)->array(of_applicable_rulesets)) needs an extra step, since the unique values are around 5K (the `int`s from all the `[]int`s),
-**   the implementation is to flip the map and try to encode a [][]uint32
-**   where the index of the first dimension is the value from the map, and the second index is the order of occurence of the hash, and finally the uint32 values are the hashes
-** Exported functions:
-**   Parse -- reads the rules from the given path, and constructs the appropriate structures resulting in a HtEvSt or an error
-**   Encode/EncodeToPath/Decode -- as their name suggests handles encoding and decoding of the structure, EncodeToPath flushes the compressed format to a specified file.
-**   TryRewrite -- searches for and applies the appropriate rewrite rules, returns the new url (or old one if no match occured) or an error
- */
 import (
 	"bytes"
 	"encoding/xml"
