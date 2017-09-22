@@ -1,5 +1,5 @@
-Go PCRE Matcher
-===============
+Go HTTPS Everywhere
+===================
 
 [![GoDoc](https://godoc.org/github.com/tenta-browser/go-https-everywhere?status.svg)](https://godoc.org/github.com/tenta-browser/go-https-everywhere)
 
@@ -7,7 +7,7 @@ Go PCRE Matcher
 
 Contains exports for both compressed ruleset construction, client-side read-only use,
 and the reconstruction into memory of compressed rules, and finally the actual intended URL rewrite logic. Matching and rewrite operations
-use a [regex interface bridge](https://github.com/tenta-browser/goutils) package, which can be implemented in the target
+use a [regex interface bridge](https://github.com/tenta-browser/go-pcre-matcher) package, which can be implemented in the target
 environment.
 
 Currently missing the cookie secure flag feature which will be in a future iteration.
