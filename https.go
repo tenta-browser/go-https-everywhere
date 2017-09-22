@@ -28,7 +28,6 @@ package https
  */
 import (
 	"bytes"
-	"dawgutils/serialize"
 	"encoding/xml"
 	"fmt"
 	"hash/fnv"
@@ -38,7 +37,8 @@ import (
 	"time"
 
 	"github.com/seiflotfy/cuckoofilter"
-	"github.com/tenta-browser/goutils"
+	serialize "github.com/tenta-browser/go-bitstream-ops"
+	goutils "github.com/tenta-browser/go-pcre-matcher"
 	"golang.org/x/net/publicsuffix"
 )
 
