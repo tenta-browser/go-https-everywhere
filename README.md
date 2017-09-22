@@ -57,7 +57,7 @@ HTTPS Everywhere is a project of the Electronic Frontier Foundation.
 
 The Electronic Frontier Foundation is the leading nonprofit organization defending civil liberties in the digital world. Founded in 1990, EFF champions user privacy, free expression, and innovation through impact litigation, policy analysis, grassroots activism, and technology development. 
 
-[Support the EFF](https://supporters.eff.org/donate)
+[Support the EFF and HTTPS Everywhere](https://supporters.eff.org/donate/support-https-everywhere)
 
 About Tenta
 ===========
