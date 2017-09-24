@@ -25,6 +25,7 @@ API
 * `Parse()`: Reads, and constructs the rulesets into memory
 * `Encode()`/`Decode()`/`EncodeToPath()`: Handles encode and decode operations
 * `TryRewrite()`: Searches and (if applicable) rewrites the input url according to the rewrite rules
+* `ShowStats()`: Prints a line of encoding statistics
 
 License
 =======
