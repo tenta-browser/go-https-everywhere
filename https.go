@@ -95,6 +95,7 @@ type RulesetSt struct {
 	Index     int
 	Name      string        `xml:"name,attr"`
 	Disabled  string        `xml:"default_off,attr"`
+	Platform  string        `xml:"platform,attr"`
 	Target    []TargetSt    `xml:"target"`
 	Rule      []RuleSt      `xml:"rule"`
 	Exclusion []ExclusionSt `xml:"exclusion"`
@@ -821,7 +822,7 @@ func Parse(RulePath string) (*HtEvSt, error) {
 		}
 
 		/// use only valid rulesets
-		if res.Disabled == "" {
+		if res.Disabled == "" && res.Platform != "mixedcontent" {
 			/// collect some data to brag about
 			inputNum += len(res.Target)
 			for _, rule := range res.Rule {
