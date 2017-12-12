@@ -822,7 +822,7 @@ func Parse(RulePath string) (*HtEvSt, error) {
 		}
 
 		/// use only valid rulesets
-		if res.Disabled == "" && res.Platform != "mixedcontent" {
+		if res.Disabled == "" && res.Platform != "mixedcontent" && res.Platform != "cacert" {
 			/// collect some data to brag about
 			inputNum += len(res.Target)
 			for _, rule := range res.Rule {
