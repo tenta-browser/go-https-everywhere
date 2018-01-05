@@ -63,6 +63,9 @@ import (
 	"golang.org/x/net/publicsuffix"
 )
 
+// LogEnabled controls whether a log is written
+var LogEnabled = true
+
 /// cannot const the slice
 var possibleUintDelimiter = map[uint32]bool{0xfadea3a1: true, 0xbaadface: true, 0xfefefefe: true, 0x0dabbee2: true, 0xffffffff: true}
 var chosenDelimiter uint32
@@ -172,19 +175,25 @@ func (h *HtEvSt) search(t string) (ruleInd []int, e error) {
 
 	for k, v := range h.optimizedForward {
 		if m := k.Search(variations[0]); m != nil && m.GroupPresentByIdx(0) == true {
-			fmt.Printf("Rule struct found via forward.\n")
+			if LogEnabled {
+				fmt.Printf("Rule struct found via forward.\n")
+			}
 			if ruleInd == nil {
 				ruleInd = make([]int, 0)
 			}
 			ruleInd = append(ruleInd, v...)
 		}
 	}
-	fmt.Printf("Searching using [%v]\n", variations)
+	if LogEnabled {
+		fmt.Printf("Searching using [%v]\n", variations)
+	}
 	/// next, check filter and map
 	for _, v := range variations {
 		if h.filter.Lookup([]byte(v)) {
 			if ind, contains := h.regularMap[hash(v)]; contains {
-				fmt.Printf("Rule struct found via filter+regular.\n")
+				if LogEnabled {
+					fmt.Printf("Rule struct found via filter+regular.\n")
+				}
 				if ruleInd == nil {
 					ruleInd = make([]int, 0)
 				}
@@ -209,7 +218,9 @@ func (h *HtEvSt) TryRewrite(in string) (out string, e error) {
 	if ruleIndices == nil {
 		return
 	}
-	fmt.Printf("Search yielded for [%s] %d rule sets\n", in, len(ruleIndices))
+	if LogEnabled {
+		fmt.Printf("Search yielded for [%s] %d rule sets\n", in, len(ruleIndices))
+	}
 
 	/// here comes another batch of pcre-dependent codes
 	for _, ri := range ruleIndices {
@@ -222,7 +233,9 @@ func (h *HtEvSt) TryRewrite(in string) (out string, e error) {
 			}
 			/// try matching the exclusions
 			if m := re.Search(in); m != nil && m.GroupPresentByIdx(0) == true {
-				fmt.Printf("Input [%s] excluded via pattern [%s].\n", in, excl)
+				if LogEnabled {
+					fmt.Printf("Input [%s] excluded via pattern [%s].\n", in, excl)
+				}
 				needsToContinue = true
 				break
 			}
@@ -238,10 +251,14 @@ func (h *HtEvSt) TryRewrite(in string) (out string, e error) {
 			}
 
 			if m := re.Search(in); m != nil && m.GroupPresentByIdx(0) == true {
-				fmt.Printf("Input [%s] matching rewrite pattern [%s].\n", in, rewrite)
+				if LogEnabled {
+					fmt.Printf("Input [%s] matching rewrite pattern [%s].\n", in, rewrite)
+				}
 				out := re.Replace(in, rule.ruleTo[i])
-				fmt.Printf("Rewrote to [%s]\n", out)
-				fmt.Printf("Search+Rewrite took [%v] time.\n", time.Now().Sub(start))
+				if LogEnabled {
+					fmt.Printf("Rewrote to [%s]\n", out)
+					fmt.Printf("Search+Rewrite took [%v] time.\n", time.Now().Sub(start))
+				}
 				return out, nil
 			}
 		}
@@ -383,7 +400,9 @@ func decodeRegularMap(b []byte) (m map[uint32][]int, e error) {
 		}
 	}
 
-	// fmt.Printf("Reconstructed regular map. it has dimension of [%d]\n", len(m))
+	// if logEnabled {
+	// 	fmt.Printf("Reconstructed regular map. it has dimension of [%d]\n", len(m))
+	// }
 	return
 }
 
@@ -605,7 +624,9 @@ func (h *HtEvSt) ShowStats() {
 	for _, r := range h.regularSlice {
 		cnt += r.countChars()
 	}
-	fmt.Printf("We have filter [%d], slice [%d], map [%d], forward [%d]. Chars [%d]\n", h.filter.Count(), len(h.regularSlice), len(h.regularMap), len(h.optimizedForward), cnt)
+	if LogEnabled {
+		fmt.Printf("We have filter [%d], slice [%d], map [%d], forward [%d]. Chars [%d]\n", h.filter.Count(), len(h.regularSlice), len(h.regularMap), len(h.optimizedForward), cnt)
+	}
 }
 
 // Decode - reconstructs the structure from a byte slice
@@ -620,7 +641,9 @@ func Decode(b []byte) (h *HtEvSt, e error) {
 		return nil, fmt.Errorf("Cannot read length of filter [%s]", e.Error())
 	}
 	remaining -= int(temp) + 4
-	fmt.Printf("Detaching %d bytes for filter data -- remains %d\n", int(temp), remaining)
+	if LogEnabled {
+		fmt.Printf("Detaching %d bytes for filter data -- remains %d\n", int(temp), remaining)
+	}
 	/// detach (yeah, that's what this function should be called) encoded filter bytes
 	if tempb, e = r.DeAppend(int(temp)); e != nil {
 		return nil, fmt.Errorf("Cannot read filter bytes [%s]", e.Error())
@@ -635,7 +658,9 @@ func Decode(b []byte) (h *HtEvSt, e error) {
 	}
 	/// detach encoded regular slice bytes
 	remaining -= int(temp) + 4
-	fmt.Printf("Detaching %d bytes for reg slice data -- remains %d\n", int(temp), remaining)
+	if LogEnabled {
+		fmt.Printf("Detaching %d bytes for reg slice data -- remains %d\n", int(temp), remaining)
+	}
 	if tempb, e = r.DeAppend(int(temp)); e != nil {
 		return nil, fmt.Errorf("Cannot read regular slice bytes [%s]", e.Error())
 	}
@@ -649,7 +674,9 @@ func Decode(b []byte) (h *HtEvSt, e error) {
 	}
 	/// detach encoded regular map bytes
 	remaining -= int(temp) + 4
-	fmt.Printf("Detaching %d bytes for reg map data -- remains %d\n", int(temp), remaining)
+	if LogEnabled {
+		fmt.Printf("Detaching %d bytes for reg map data -- remains %d\n", int(temp), remaining)
+	}
 	if tempb, e = r.DeAppend(int(temp)); e != nil {
 		return nil, fmt.Errorf("Cannot read regular map bytes [%s]", e.Error())
 	}
@@ -662,7 +689,9 @@ func Decode(b []byte) (h *HtEvSt, e error) {
 		return nil, fmt.Errorf("Cannot read length of forward map [%s]", e.Error())
 	}
 	remaining -= int(temp) + 4
-	fmt.Printf("Detaching %d bytes for fwd map data -- remains %d\n", int(temp), remaining)
+	if LogEnabled {
+		fmt.Printf("Detaching %d bytes for fwd map data -- remains %d\n", int(temp), remaining)
+	}
 	/// detach encoded forward map bytes
 	if tempb, e = r.DeAppend(int(temp)); e != nil {
 		return nil, fmt.Errorf("Cannot read forward map bytes [%s]", e.Error())
@@ -721,7 +750,9 @@ func (h *HtEvSt) Encode() (ret []byte, e error) {
 	b.Append(t)
 	sumBytes += len(t) + 4
 
-	fmt.Printf("The encode buffer is [%d] bytes long.\n", len(b.Buffer()))
+	if LogEnabled {
+		fmt.Printf("The encode buffer is [%d] bytes long.\n", len(b.Buffer()))
+	}
 
 	return b.Buffer(), nil
 }
@@ -817,7 +848,9 @@ func Parse(RulePath string) (*HtEvSt, error) {
 
 		res := data.newRulesetSt()
 		if err := xml.Unmarshal(xmldata, &res); err != nil {
-			fmt.Printf("Error occured in file [%s] :: [%s]\n", entry.Name(), err.Error())
+			if LogEnabled {
+				fmt.Printf("Error occured in file [%s] :: [%s]\n", entry.Name(), err.Error())
+			}
 			continue
 		}
 
@@ -840,7 +873,9 @@ func Parse(RulePath string) (*HtEvSt, error) {
 				}
 				/// when a wildcard is not on one of the extremes of the string, save it in a straightforward map
 				if strings.Count(t.Host, "*") >= 1 && !strings.HasPrefix(t.Host, "*") && !strings.HasSuffix(t.Host, "*") {
-					fmt.Printf(">>[%s] SAVED IN FORWARD\n", t.Host)
+					if LogEnabled {
+						fmt.Printf(">>[%s] SAVED IN FORWARD\n", t.Host)
+					}
 					if data.forward[t.Host] == nil {
 						data.forward[t.Host] = make([]*RulesetSt, 0)
 					}
@@ -858,7 +893,9 @@ func Parse(RulePath string) (*HtEvSt, error) {
 				test[t.Host] = append(test[t.Host], res)
 			}
 		} else {
-			// fmt.Printf("Disabled rule [%s] cause [%s]\n", res.Name, res.Disabled)
+			// if logEnabled {
+			// 	fmt.Printf("Disabled rule [%s] cause [%s]\n", res.Name, res.Disabled)
+			// }
 		}
 
 	}
@@ -875,7 +912,9 @@ func Parse(RulePath string) (*HtEvSt, error) {
 		hc := hash(target)
 		/// if there's a collision, move the target to forward table, and save with the larger structure (will be simplified later)
 		if _, contains := data.regularMap[hc]; contains && collisionChecker[hc] != target {
-			fmt.Printf("Collision detected --> moving target [%s] to forward table.\n", target)
+			if LogEnabled {
+				fmt.Printf("Collision detected --> moving target [%s] to forward table.\n", target)
+			}
 			data.forward[target] = objArr
 			continue
 		}
@@ -901,7 +940,9 @@ func Parse(RulePath string) (*HtEvSt, error) {
 				}
 
 				if len(simple.ruleFrom) != len(simple.ruleTo) {
-					fmt.Printf("BIG PROBLEM! [%s]\n[%s]\n", simple, obj)
+					if LogEnabled {
+						fmt.Printf("BIG PROBLEM! [%s]\n[%s]\n", simple, obj)
+					}
 				}
 				data.regularSlice = append(data.regularSlice, simple)
 				currInd := len(data.regularSlice) - 1
@@ -912,7 +953,9 @@ func Parse(RulePath string) (*HtEvSt, error) {
 	}
 
 	/// bragging and testing section
-	fmt.Printf("Read [%d] entries, with [%d] targets grand total, [%d] total characters, and [%d] tricky wildcards\n", len(data.input), inputNum, inputStrlen, trickyNum)
+	if LogEnabled {
+		fmt.Printf("Read [%d] entries, with [%d] targets grand total, [%d] total characters, and [%d] tricky wildcards\n", len(data.input), inputNum, inputStrlen, trickyNum)
+	}
 	start := time.Now()
 	for _, e := range data.input {
 		for _, t := range e.Target {
@@ -921,17 +964,21 @@ func Parse(RulePath string) (*HtEvSt, error) {
 			}
 		}
 	}
-	fmt.Printf("Checked entries in [%v] time\n", time.Now().Sub(start))
-	fmt.Printf("Filter takes around [%d] space.\n", len(data.filter.Encode()))
-	fmt.Printf("Hashmap stats %d vs %d vs %d\n", len(data.regularMap), len(test), len(data.regularSlice))
+	if LogEnabled {
+		fmt.Printf("Checked entries in [%v] time\n", time.Now().Sub(start))
+		fmt.Printf("Filter takes around [%d] space.\n", len(data.filter.Encode()))
+		fmt.Printf("Hashmap stats %d vs %d vs %d\n", len(data.regularMap), len(test), len(data.regularSlice))
+	}
 
 	totalcharsAgain := 0
 	for _, r := range data.regularSlice {
 		totalcharsAgain += r.countChars()
 	}
 	bitnum := int(math.Ceil(math.Log2(float64(len(data.regularSlice)))))
-	fmt.Printf("And again just to double check, [%d] is the total number of characters. [%d] entries --> [%d] bits to encode indexes\n", totalcharsAgain, len(data.regularSlice), bitnum)
-	fmt.Printf("Map will approximately take [%d] bytes to encode.\n", 4*(len(data.regularMap)+len(data.regularSlice)+1))
+	if LogEnabled {
+		fmt.Printf("And again just to double check, [%d] is the total number of characters. [%d] entries --> [%d] bits to encode indexes\n", totalcharsAgain, len(data.regularSlice), bitnum)
+		fmt.Printf("Map will approximately take [%d] bytes to encode.\n", 4*(len(data.regularMap)+len(data.regularSlice)+1))
+	}
 
 	return data, nil
 }
